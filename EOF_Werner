@@ -1,0 +1,119 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# --- Funções principais para o Emaranhamento de Formação --- #
+
+def calculate_concurrence(rho):
+    """
+    Calcula a Concorrência para um estado de densidade de 2 qubits.
+    
+    Args:
+        rho (np.array): Matriz de densidade 4x4 do estado de 2 qubits.
+        
+    Returns:
+        float: A Concorrência C(rho), um valor entre 0 e 1.
+    """
+    # 1. Calcular a matriz spin-flipped rho_tilde
+    sigma_y = np.array([[0, -1j], [1j, 0]])
+    kron_sy = np.kron(sigma_y, sigma_y)
+    
+    # rho_tilde = (sy tensor sy) * rho_conjugado * (sy tensor sy)
+    rho_tilde = kron_sy @ rho.conj() @ kron_sy
+    
+    # 2. Calcular a matriz R = rho * rho_tilde
+    R = rho @ rho_tilde
+    
+    # 3. Encontrar os autovalores de R
+    # Usamos np.linalg.eigvals pois R não é necessariamente Hermitiana
+    evals = np.linalg.eigvals(R)
+    
+    # 4. Calcular as raízes quadradas dos autovalores
+    # Lidamos com pequenas imprecisões numéricas que podem gerar valores negativos
+    sqrt_evals = np.sqrt(np.maximum(0, np.real(evals)))
+    
+    # 5. Ordenar em ordem decrescente
+    sorted_sqrt_evals = np.sort(sqrt_evals)[::-1]
+    
+    # 6. Calcular a Concorrência usando a fórmula de Wootters
+    l1, l2, l3, l4 = sorted_sqrt_evals
+    concurrence = np.maximum(0, l1 - l2 - l3 - l4)
+    
+    return concurrence
+
+def binary_entropy(x):
+    """Calcula a entropia binária H(x)."""
+    # Evita erros de log(0) nos casos de borda
+    if x == 0 or x == 1:
+        return 0
+    return -x * np.log2(x) - (1 - x) * np.log2(1 - x)
+
+def calculate_eof(concurrence):
+    """
+    Calcula o Emaranhamento de Formação a partir da Concorrência.
+    
+    Args:
+        concurrence (float): O valor da Concorrência C.
+    
+    Returns:
+        float: O Emaranhamento de Formação E_f.
+    """
+    if concurrence == 0:
+        return 0
+    
+    # Argumento da função de entropia binária
+    term = (1 + np.sqrt(1 - concurrence**2)) / 2
+    return binary_entropy(term)
+
+# --- Funções de exemplo (Estado de Werner) --- #
+
+def werner_state(p):
+    """
+    Gera a matriz de densidade para o estado de Werner.
+    
+    Args:
+        p (float): Parâmetro de mistura, entre 0 e 1.
+    """
+    # O estado de Bell |Psi+> = 1/sqrt(2) * (|00> + |11>)
+    psi_plus_dm = np.array([[0.5, 0,   0, 0.5],
+                            [0,   0,   0, 0  ],
+                            [0,   0,   0, 0  ],
+                            [0.5, 0,   0, 0.5]])
+    
+    # Estado maximally misturado I/4
+    I4 = np.eye(4) / 4.0
+    
+    return p * psi_plus_dm + (1 - p) * I4
+
+# --- Script principal para gerar o gráfico --- #
+if __name__ == "__main__":
+    # Varrer o parâmetro 'p' do estado de Werner de 0 a 1
+    ps = np.linspace(0, 1, 100)
+    eofs = []
+
+    for p in ps:
+        # 1. Gerar o estado de Werner para um dado p
+        rho = werner_state(p)
+        
+        # 2. Calcular sua Concorrência
+        C = calculate_concurrence(rho)
+        
+        # 3. Calcular o Emaranhamento de Formação
+        Ef = calculate_eof(C)
+        
+        eofs.append(Ef)
+
+    # --- Plotar o resultado --- #
+    plt.style.use('seaborn-v0_8-whitegrid')
+    plt.figure(figsize=(8, 6))
+    plt.plot(ps, eofs, label="Emaranhamento de Formação ($E_f$)", color='purple', linewidth=2.5)
+    
+    # Adicionar uma linha vertical onde o emaranhamento começa a aparecer
+    plt.axvline(x=1/3, color='gray', linestyle='--', label=r'$p = 1/3$ (limiar de emaranhamento)')
+
+    plt.xlabel("p (parâmetro de pureza do estado de Werner)", fontsize=12)
+    plt.ylabel("Emaranhamento de Formação (e-bits)", fontsize=12)
+    plt.title("Emaranhamento de Formação para o Estado de Werner", fontsize=14)
+    plt.legend(fontsize=11)
+    plt.xlim(0, 1)
+    plt.ylim(0, 1.05)
+    plt.show()
